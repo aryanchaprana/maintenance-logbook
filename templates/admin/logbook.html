@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Book — Nash Energy</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/images/nash-logo.svg" alt="Nash Energy">
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-item"><span class="nav-icon">🏠</span> Dashboard</a>
+      <a href="/admin/machines"  class="nav-item"><span class="nav-icon">🔧</span> Equipment Master</a>
+      <a href="/admin/logbook"   class="nav-item active"><span class="nav-icon">📋</span> Log Book</a>
+      <a href="/admin/analysis"  class="nav-item"><span class="nav-icon">📊</span> Analysis</a>
+      <a href="/admin/settings"  class="nav-item"><span class="nav-icon">⚙️</span> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ username[0]|upper }}</div>
+        <div><div class="user-name">{{ username }}</div><div class="user-role">Administrator</div></div>
+      </div>
+      <button class="btn-logout" onclick="logout()">🚪 Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Log Book</div>
+        <div class="page-subtitle">Review and confirm maintenance entries</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="badge badge-pending" id="pending-badge" style="font-size:13px;padding:6px 14px;">⏳ — Pending</span>
+        <button class="btn btn-primary" onclick="openModal('export-modal')">⬇ Export Excel</button>
+      </div>
+    </div>
+
+    <div class="page-body">
+      <!-- Filters -->
+      <div class="card" style="padding:14px 20px;margin-bottom:16px;">
+        <div class="filter-bar" style="margin-bottom:0;flex-wrap:wrap;">
+          <select class="form-control" id="f-review" onchange="loadEntries()">
+            <option value="">All Review Status</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+          </select>
+          <select class="form-control" id="f-status" onchange="loadEntries()">
+            <option value="">All Statuses</option>
+          </select>
+          <select class="form-control" id="f-category" onchange="loadEntries()">
+            <option value="">All Categories</option>
+          </select>
+          <select class="form-control" id="f-machine" onchange="loadEntries()">
+            <option value="">All Machines</option>
+          </select>
+          <input type="date" class="form-control" id="f-from" onchange="loadEntries()" title="From date">
+          <input type="date" class="form-control" id="f-to"   onchange="loadEntries()" title="To date">
+          <button class="btn btn-secondary btn-sm" onclick="clearFilters()">✕ Clear</button>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="card mb-0">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Date</th>
+                <th>Machine</th>
+                <th>Area</th>
+                <th>Module</th>
+                <th>Shift</th>
+                <th>Start – End</th>
+                <th>Down Time</th>
+                <th>Trouble Description</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Submitted By</th>
+                <th>Review</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="log-tbody">
+              <tr><td colspan="14"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Export Modal ─────────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="export-modal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <span class="modal-title">⬇ Export Log Book to Excel</span>
+      <button class="modal-close" onclick="closeModal('export-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:18px;">
+        Apply filters below to export a specific subset of entries. Leave blank to export all.
+      </p>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Date From</label>
+          <input type="date" class="form-control" id="ex-from">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Date To</label>
+          <input type="date" class="form-control" id="ex-to">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Machine</label>
+          <select class="form-control" id="ex-machine">
+            <option value="">All Machines</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="ex-category">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-control" id="ex-status">
+            <option value="">All Statuses</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Review Status</label>
+          <select class="form-control" id="ex-review">
+            <option value="">All</option>
+            <option value="pending">Pending</option>
+            <option value="confirmed">Confirmed</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('export-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="doExport()">⬇ Download Excel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Review / Edit Modal ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="entry-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Review &amp; Edit Log Entry</span>
+      <button class="modal-close" onclick="closeModal('entry-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-entry-id">
+
+      <!-- Machine info bar -->
+      <div style="background:var(--accent-green-light);border:1px solid #b8e0be;border-radius:var(--radius);padding:10px 16px;margin-bottom:16px;">
+        <div class="flex items-center gap-2" style="margin-bottom:2px">
+          <strong id="modal-eq-no" style="color:var(--accent-green2)"></strong>
+          <span id="modal-machine-name" style="color:var(--text-secondary)"></span>
+        </div>
+        <span class="text-muted text-sm" id="modal-machine-loc"></span>
+      </div>
+
+      <!-- Row 1: Machine + Area + Module -->
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">Machine *</label>
+          <select class="form-control" id="e-machine" onchange="onModalMachineChange()">
+            <option value="">Select machine…</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Area</label>
+          <input type="text" class="form-control" id="e-area" placeholder="e.g. Production">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Module</label>
+          <input type="text" class="form-control" id="e-module" placeholder="e.g. Compressor">
+        </div>
+      </div>
+
+      <!-- Row 2: Date + Times + Shift + Downtime -->
+      <div class="form-row" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr">
+        <div class="form-group">
+          <label class="form-label">Start Date *</label>
+          <input type="date" class="form-control" id="e-date" oninput="updateDowntime()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Time *</label>
+          <input type="time" class="form-control" id="e-start" oninput="updateDowntime()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Date</label>
+          <input type="date" class="form-control" id="e-end-date" oninput="updateDowntime()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">End Time *</label>
+          <input type="time" class="form-control" id="e-end" oninput="updateDowntime()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Shift</label>
+          <input type="text" class="form-control" id="e-shift" readonly style="background:var(--bg-hover);color:var(--accent-green2);font-weight:600">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Down Time</label>
+          <div class="downtime-display" id="e-downtime-display" style="height:38px;margin-top:0">—</div>
+        </div>
+      </div>
+
+      <!-- Error Message -->
+      <div class="form-group">
+        <label class="form-label">Error Message in HMI</label>
+        <input type="text" class="form-control" id="e-error-msg" placeholder="e.g. E01, F12…">
+      </div>
+
+      <!-- Descriptions -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Trouble Description *</label>
+          <textarea class="form-control" id="e-trouble" rows="3"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Maintenance Action Taken</label>
+          <textarea class="form-control" id="e-action" rows="3"></textarea>
+        </div>
+      </div>
+
+      <!-- Row: Category + Occurrence + Status + Quality -->
+      <div class="form-row" style="grid-template-columns:1fr 1fr 1fr 1fr">
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-control" id="e-category"><option value="">—</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Occurrence</label>
+          <select class="form-control" id="e-occurrence"><option value="">—</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Status</label>
+          <select class="form-control" id="e-status"><option value="">—</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quality Confirmation</label>
+          <select class="form-control" id="e-quality"><option value="">—</option></select>
+        </div>
+      </div>
+
+      <!-- Engineers + Checked By -->
+      <div class="form-row" style="grid-template-columns:1fr 1fr 1fr 1fr">
+        <div class="form-group">
+          <label class="form-label">Engineer 1</label>
+          <input type="text" class="form-control" id="e-eng1" placeholder="Name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Engineer 2</label>
+          <input type="text" class="form-control" id="e-eng2" placeholder="Name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Engineer 3</label>
+          <input type="text" class="form-control" id="e-eng3" placeholder="Name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Checked By</label>
+          <input type="text" class="form-control" id="e-checked-by" placeholder="Admin name…">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('entry-modal')">Cancel</button>
+      <button class="btn btn-secondary" onclick="saveEntry(false)">💾 Save Only</button>
+      <button class="btn btn-success"   onclick="saveEntry(true)">✅ Confirm &amp; Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let allMachines = [], dropdowns = {}, allEntries = [];
+
+function getShift(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const mins = h * 60 + m;
+  if (mins >= 360 && mins < 840)  return 'A';   // 06:00 – 13:59
+  if (mins >= 840 && mins < 1320) return 'B';   // 14:00 – 21:59
+  return 'C';                                    // 22:00 – 05:59
+}
+
+async function init() {
+  // Machines
+  const mRes = await api('/api/machines');
+  if (mRes && mRes.ok) {
+    allMachines = await mRes.json();
+    ['f-machine','e-machine','ex-machine'].forEach(selId => {
+      const sel = document.getElementById(selId);
+      allMachines.forEach(m => {
+        sel.innerHTML += `<option value="${m.id}">${m.equipment_no} — ${m.name}</option>`;
+      });
+    });
+  }
+
+  // Dropdowns
+  const dRes = await api('/api/dropdown-options');
+  if (dRes && dRes.ok) {
+    const opts = await dRes.json();
+    ['category','occurrence','status','quality_confirmation'].forEach(f => {
+      dropdowns[f] = opts.filter(o => o.field_name === f);
+    });
+
+    // Filter bar
+    dropdowns.status.forEach(o =>
+      document.getElementById('f-status').innerHTML += `<option value="${o.value}">${o.value}</option>`);
+    dropdowns.category.forEach(o =>
+      document.getElementById('f-category').innerHTML += `<option value="${o.value}">${o.value}</option>`);
+
+    // Export modal
+    dropdowns.status.forEach(o =>
+      document.getElementById('ex-status').innerHTML += `<option value="${o.value}">${o.value}</option>`);
+    dropdowns.category.forEach(o =>
+      document.getElementById('ex-category').innerHTML += `<option value="${o.value}">${o.value}</option>`);
+
+    // Edit modal
+    const editMap = {category:'e-category', occurrence:'e-occurrence', status:'e-status', quality_confirmation:'e-quality'};
+    Object.entries(editMap).forEach(([field, elId]) => {
+      const sel = document.getElementById(elId);
+      (dropdowns[field] || []).forEach(o => sel.innerHTML += `<option value="${o.value}">${o.value}</option>`);
+    });
+  }
+
+  loadEntries();
+}
+
+async function loadEntries() {
+  const params = new URLSearchParams();
+  if (document.getElementById('f-review').value)    params.set('review_status', document.getElementById('f-review').value);
+  if (document.getElementById('f-status').value)    params.set('status',        document.getElementById('f-status').value);
+  if (document.getElementById('f-category').value)  params.set('category',      document.getElementById('f-category').value);
+  if (document.getElementById('f-machine').value)   params.set('machine_id',    document.getElementById('f-machine').value);
+  if (document.getElementById('f-from').value)      params.set('date_from',     document.getElementById('f-from').value);
+  if (document.getElementById('f-to').value)        params.set('date_to',       document.getElementById('f-to').value);
+
+  const res = await api('/api/log-entries?' + params);
+  if (!res || !res.ok) return;
+  allEntries = await res.json();
+
+  const pending = allEntries.filter(e => e.review_status === 'pending').length;
+  document.getElementById('pending-badge').textContent = `⏳ ${pending} Pending`;
+
+  const tbody = document.getElementById('log-tbody');
+  if (!allEntries.length) {
+    tbody.innerHTML = '<tr><td colspan="14"><div class="empty-state"><div class="empty-icon">📭</div><p>No entries found.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = allEntries.map((e, i) => {
+    const shiftLabel = (e.shift || getShift(e.start_time));
+    const shiftDisplay = shiftLabel ? `<span style="font-weight:600;color:var(--accent-green2)">${shiftLabel} Shift</span>` : '—';
+    return `
+    <tr class="${e.review_status === 'pending' ? 'pending-row' : ''}">
+      <td class="text-muted">${i+1}</td>
+      <td style="white-space:nowrap">${fmtDate(e.entry_date)}</td>
+      <td>
+        <strong style="color:var(--accent-green2)">${e.equipment_no}</strong>
+        <br><span class="text-sm text-muted">${e.machine_name}</span>
+      </td>
+      <td>${e.area || '—'}</td>
+      <td>${e.module || '—'}</td>
+      <td style="white-space:nowrap;font-size:12px">${shiftDisplay}</td>
+      <td style="white-space:nowrap;font-size:12px">${e.start_time}<br>– ${e.end_date && e.end_date !== e.entry_date ? fmtDate(e.end_date)+' ' : ''}${e.end_time}</td>
+      <td style="font-weight:600;color:var(--accent-orange);white-space:nowrap">${fmtDowntime(e.down_time_minutes)}</td>
+      <td style="max-width:200px;font-size:12px">${e.trouble_description}</td>
+      <td>${e.category || '—'}</td>
+      <td>${statusBadge(e.status)}</td>
+      <td class="text-muted text-sm">${e.submitted_by_name}</td>
+      <td>${reviewBadge(e.review_status)}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openEntry(${e.id})">✏️ Review</button></td>
+    </tr>
+  `;
+  }).join('');
+}
+
+function clearFilters() {
+  ['f-review','f-status','f-category','f-machine','f-from','f-to']
+    .forEach(id => document.getElementById(id).value = '');
+  loadEntries();
+}
+
+function doExport() {
+  const params = new URLSearchParams();
+  if (document.getElementById('ex-from').value)     params.set('date_from',     document.getElementById('ex-from').value);
+  if (document.getElementById('ex-to').value)       params.set('date_to',       document.getElementById('ex-to').value);
+  if (document.getElementById('ex-machine').value)  params.set('machine_id',    document.getElementById('ex-machine').value);
+  if (document.getElementById('ex-category').value) params.set('category',      document.getElementById('ex-category').value);
+  if (document.getElementById('ex-status').value)   params.set('status',        document.getElementById('ex-status').value);
+  if (document.getElementById('ex-review').value)   params.set('review_status', document.getElementById('ex-review').value);
+  const url = '/api/log-entries/export?' + params;
+  window.location.href = url;
+  closeModal('export-modal');
+}
+
+function onModalMachineChange() {
+  const id = parseInt(document.getElementById('e-machine').value);
+  const m  = allMachines.find(x => x.id === id);
+  if (m) {
+    document.getElementById('modal-eq-no').textContent       = m.equipment_no;
+    document.getElementById('modal-machine-name').textContent = m.name;
+    document.getElementById('modal-machine-loc').textContent  = m.location || '';
+    document.getElementById('e-area').value   = m.area   || '';
+    document.getElementById('e-module').value = m.module || '';
+  }
+}
+
+function openEntry(id) {
+  const e = allEntries.find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('edit-entry-id').value            = e.id;
+  document.getElementById('modal-eq-no').textContent        = e.equipment_no;
+  document.getElementById('modal-machine-name').textContent = e.machine_name;
+  document.getElementById('modal-machine-loc').textContent  = e.machine_location || '';
+  document.getElementById('e-machine').value     = e.machine_id;
+  document.getElementById('e-area').value        = e.area      || '';
+  document.getElementById('e-module').value      = e.module    || '';
+  document.getElementById('e-date').value        = e.entry_date;
+  document.getElementById('e-end-date').value    = e.end_date  || e.entry_date;
+  document.getElementById('e-start').value       = e.start_time;
+  document.getElementById('e-end').value         = e.end_time;
+  document.getElementById('e-error-msg').value   = e.error_message   || '';
+  document.getElementById('e-trouble').value     = e.trouble_description;
+  document.getElementById('e-action').value      = e.maintenance_action || '';
+  document.getElementById('e-category').value    = e.category   || '';
+  document.getElementById('e-occurrence').value  = e.occurrence || '';
+  document.getElementById('e-status').value      = e.status     || '';
+  document.getElementById('e-quality').value     = e.quality_confirmation || '';
+  document.getElementById('e-eng1').value        = e.engineer1  || '';
+  document.getElementById('e-eng2').value        = e.engineer2  || '';
+  document.getElementById('e-eng3').value        = e.engineer3  || '';
+  document.getElementById('e-checked-by').value  = e.checked_by || '';
+  updateDowntime();
+  openModal('entry-modal');
+}
+
+function updateDowntime() {
+  const startDate = document.getElementById('e-date').value;
+  const endDate   = document.getElementById('e-end-date').value || startDate;
+  const st = document.getElementById('e-start').value;
+  const et = document.getElementById('e-end').value;
+  const display = document.getElementById('e-downtime-display');
+  if (st && et && startDate) {
+    const startMs = new Date(`${startDate}T${st}:00`).getTime();
+    const endMs   = new Date(`${endDate}T${et}:00`).getTime();
+    let mins = Math.round((endMs - startMs) / 60000);
+    if (mins < 0) mins = 0;
+    display.textContent = fmtDowntime(mins);
+  } else {
+    display.textContent = '—';
+  }
+  // Auto-update shift from start time
+  const shift = getShift(st);
+  document.getElementById('e-shift').value = shift ? shift + ' Shift' : '';
+}
+
+async function saveEntry(confirm) {
+  const id = document.getElementById('edit-entry-id').value;
+  if (!id) return;
+  const payload = {
+    machine_id:           document.getElementById('e-machine').value,
+    area:                 document.getElementById('e-area').value.trim(),
+    module:               document.getElementById('e-module').value.trim(),
+    entry_date:           document.getElementById('e-date').value,
+    end_date:             document.getElementById('e-end-date').value || document.getElementById('e-date').value,
+    shift:                getShift(document.getElementById('e-start').value),
+    start_time:           document.getElementById('e-start').value,
+    end_time:             document.getElementById('e-end').value,
+    error_message:        document.getElementById('e-error-msg').value.trim(),
+    trouble_description:  document.getElementById('e-trouble').value.trim(),
+    maintenance_action:   document.getElementById('e-action').value.trim(),
+    category:             document.getElementById('e-category').value,
+    occurrence:           document.getElementById('e-occurrence').value,
+    status:               document.getElementById('e-status').value,
+    quality_confirmation: document.getElementById('e-quality').value,
+    engineer1:            document.getElementById('e-eng1').value.trim(),
+    engineer2:            document.getElementById('e-eng2').value.trim(),
+    engineer3:            document.getElementById('e-eng3').value.trim(),
+    checked_by:           document.getElementById('e-checked-by').value.trim(),
+    confirm
+  };
+  if (!payload.trouble_description) { showToast('Trouble description is required.', 'error'); return; }
+  const res  = await api(`/api/log-entries/${id}`, { method:'PUT', body:JSON.stringify(payload) });
+  const data = await res.json();
+  if (res.ok) {
+    showToast(confirm ? 'Entry confirmed & closed. ✅' : 'Entry saved.', 'success');
+    closeModal('entry-modal');
+    loadEntries();
+  } else {
+    showToast(data.error || 'Error saving entry.', 'error');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

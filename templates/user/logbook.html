@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Book Entry — Nash Energy</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    /* ── Compact single-page form ── */
+    .entry-page {
+      display: flex; flex-direction: column;
+      height: calc(100vh - var(--header-h));
+      overflow: hidden;
+    }
+    .entry-body {
+      flex: 1; overflow: hidden;
+      padding: 16px 24px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .entry-card {
+      background: #fff; border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px 18px;
+      box-shadow: var(--shadow);
+    }
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.8px; color: var(--accent-green2);
+      margin-bottom: 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .compact-row { display: grid; gap: 10px; }
+    .col-2 { grid-template-columns: 1fr 1fr; }
+    .col-3 { grid-template-columns: 1fr 1fr 1fr; }
+    .col-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+    .col-5 { grid-template-columns: 2fr 1fr 1fr 1fr 1fr; }
+    .compact-row .form-group { margin-bottom: 0; }
+    .form-label { font-size: 11px; margin-bottom: 4px; }
+    .form-control { padding: 6px 10px; font-size: 12.5px; }
+    .entry-footer {
+      padding: 10px 24px;
+      background: #fff; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+    }
+    .downtime-badge {
+      background: var(--accent-green-light); border: 1px solid #b8e0be;
+      border-radius: 6px; padding: 6px 14px;
+      font-size: 13px; font-weight: 600; color: var(--accent-green2);
+      display: flex; align-items: center; gap: 6px;
+    }
+    /* Machine dropdown */
+    .machine-dropdown-wrap { position: relative; }
+    .machine-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: #fff; border: 1px solid var(--border);
+      border-radius: var(--radius); z-index: 300;
+      max-height: 260px; overflow-y: auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      display: none;
+    }
+    .machine-dropdown.open { display: block; }
+    .machine-item {
+      padding: 8px 12px; cursor: pointer; font-size: 12.5px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .machine-item:last-child { border-bottom: none; }
+    .machine-item:hover { background: var(--bg-hover); }
+    .machine-item .eq-no  { font-weight: 600; color: var(--accent-green2); font-size: 11.5px; }
+    .machine-item .eq-nm  { color: var(--text-primary); }
+    .machine-item .eq-loc { font-size: 11px; color: var(--text-muted); }
+    .selected-machine-display {
+      background: var(--accent-green-light); border: 1px solid #b8e0be;
+      border-radius: 6px; padding: 6px 12px;
+      font-size: 12.5px; color: var(--accent-green2); font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/images/nash-logo.svg" alt="Nash Energy">
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">User</div>
+      <a href="/user/logbook" class="nav-item active"><span class="nav-icon">📋</span> Log Book Entry</a>
+      {% if role == 'admin' %}
+      <div class="nav-section-label" style="margin-top:8px">Admin</div>
+      <a href="/admin/dashboard" class="nav-item"><span class="nav-icon">🏠</span> Dashboard</a>
+      <a href="/admin/logbook"   class="nav-item"><span class="nav-icon">📊</span> Review Entries</a>
+      {% endif %}
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ username[0]|upper }}</div>
+        <div><div class="user-name">{{ username }}</div><div class="user-role">Maintenance Staff</div></div>
+      </div>
+      <button class="btn-logout" onclick="logout()">🚪 Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">📋 Log Book Entry</div>
+        <div class="page-subtitle">Submit a new maintenance log</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="resetForm()">↺ Clear Form</button>
+    </div>
+
+    <div class="entry-page">
+      <div class="entry-body">
+
+        <!-- Row 1: Machine Selection + Date/Time -->
+        <div class="entry-card">
+          <div class="section-title">Machine &amp; Time</div>
+          <div class="compact-row" style="grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr">
+            <!-- Machine selector -->
+            <div class="form-group">
+              <label class="form-label">Machine *</label>
+              <div class="machine-dropdown-wrap">
+                <div id="machine-display" class="selected-machine-display" onclick="toggleMachineDropdown()" style="display:none">
+                  <span id="machine-display-text"></span>
+                  <span style="font-size:10px;opacity:0.7">▼ change</span>
+                </div>
+                <input type="text" class="form-control" id="machine-trigger"
+                  placeholder="Click to select machine…" readonly style="cursor:pointer"
+                  onclick="toggleMachineDropdown()">
+                <div class="machine-dropdown" id="machine-dropdown"></div>
+                <input type="hidden" id="machine-id">
+              </div>
+            </div>
+            <!-- Start Date -->
+            <div class="form-group">
+              <label class="form-label">Start Date *</label>
+              <input type="date" class="form-control" id="entry-date" oninput="calcDowntime()">
+            </div>
+            <!-- Start Time -->
+            <div class="form-group">
+              <label class="form-label">Start Time *</label>
+              <input type="time" class="form-control" id="start-time" oninput="calcDowntime()">
+            </div>
+            <!-- End Date -->
+            <div class="form-group">
+              <label class="form-label">End Date</label>
+              <input type="date" class="form-control" id="end-date" oninput="calcDowntime()" placeholder="If multi-day">
+            </div>
+            <!-- End Time -->
+            <div class="form-group">
+              <label class="form-label">End Time *</label>
+              <input type="time" class="form-control" id="end-time" oninput="calcDowntime()">
+            </div>
+            <!-- Shift (auto) -->
+            <div class="form-group">
+              <label class="form-label">Shift</label>
+              <input type="text" class="form-control auto-field" id="shift-display" readonly placeholder="Auto">
+              <input type="hidden" id="shift-value">
+            </div>
+            <!-- Down Time -->
+            <div class="form-group">
+              <label class="form-label">Down Time</label>
+              <div class="downtime-badge" id="downtime-display">⏱ —</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Auto-fill fields -->
+        <div class="entry-card">
+          <div class="section-title">Machine Details (Auto-filled)</div>
+          <div class="compact-row col-4">
+            <div class="form-group">
+              <label class="form-label">Location</label>
+              <input type="text" class="form-control auto-field" id="location" readonly placeholder="Auto-filled">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Area</label>
+              <input type="text" class="form-control auto-field" id="area" readonly placeholder="Auto-filled">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Module</label>
+              <input type="text" class="form-control auto-field" id="module" readonly placeholder="Auto-filled">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Error Message in HMI</label>
+              <input type="text" class="form-control" id="error-message" placeholder="e.g. E01, F12…">
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Descriptions -->
+        <div class="entry-card">
+          <div class="section-title">Problem &amp; Action</div>
+          <div class="compact-row col-3">
+            <div class="form-group">
+              <label class="form-label">Trouble Description *</label>
+              <textarea class="form-control" id="trouble-description" rows="2" placeholder="Describe the problem…"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Maintenance Action Taken</label>
+              <textarea class="form-control" id="maintenance-action" rows="2" placeholder="Describe what was done…"></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Quality Confirmation</label>
+              <select class="form-control" id="quality-confirmation">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 4: Classification + Engineers -->
+        <div class="entry-card">
+          <div class="section-title">Classification &amp; Engineers</div>
+          <div class="compact-row col-4" style="grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr">
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select class="form-control" id="category">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Occurrence</label>
+              <select class="form-control" id="occurrence">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Status</label>
+              <select class="form-control" id="status">
+                <option value="">— Select —</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Engineer 1</label>
+              <input type="text" class="form-control" id="eng1" placeholder="Name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Engineer 2</label>
+              <input type="text" class="form-control" id="eng2" placeholder="Name">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Engineer 3</label>
+              <input type="text" class="form-control" id="eng3" placeholder="Name">
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /entry-body -->
+
+      <!-- Footer -->
+      <div class="entry-footer">
+        <div id="submit-status" style="font-size:13px;color:var(--text-muted)">Fill in all required fields (*) and submit.</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <div id="downtime-footer" class="downtime-badge" style="display:none">⏱ <span id="dt-footer-val"></span></div>
+          <button class="btn btn-primary" onclick="submitEntry()" id="submit-btn" style="padding:9px 28px;font-size:14px">
+            ✔ Submit Entry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let allMachines = [];
+let selectedMachine = null;
+
+// ── Today's date default ──────────────────────────────────────────────────────
+document.getElementById('entry-date').value = new Date().toISOString().split('T')[0];
+
+// ── Load machines ─────────────────────────────────────────────────────────────
+async function loadMachines() {
+  const res = await api('/api/machines');
+  if (!res || !res.ok) return;
+  allMachines = await res.json();
+  renderMachineList(allMachines);
+}
+
+function renderMachineList(list) {
+  const dd = document.getElementById('machine-dropdown');
+  if (!list.length) {
+    dd.innerHTML = '<div class="machine-item" style="color:var(--text-muted)">No machines found.</div>';
+    return;
+  }
+  dd.innerHTML = list.map(m => `
+    <div class="machine-item" onclick="selectMachine(${m.id})">
+      <div>
+        <span class="eq-no">${m.equipment_no}</span>
+        <span class="eq-nm" style="margin-left:8px">${m.name}</span>
+      </div>
+      <span class="eq-loc">${m.location || ''}</span>
+    </div>
+  `).join('');
+}
+
+function toggleMachineDropdown() {
+  const dd = document.getElementById('machine-dropdown');
+  dd.classList.toggle('open');
+}
+
+function selectMachine(id) {
+  selectedMachine = allMachines.find(m => m.id === id);
+  if (!selectedMachine) return;
+  document.getElementById('machine-id').value = selectedMachine.id;
+  // Show selected display, hide trigger
+  document.getElementById('machine-trigger').style.display = 'none';
+  const disp = document.getElementById('machine-display');
+  disp.style.display = 'flex';
+  document.getElementById('machine-display-text').textContent =
+    `${selectedMachine.equipment_no} — ${selectedMachine.name}`;
+  // Auto-fill
+  document.getElementById('location').value = selectedMachine.location || '';
+  document.getElementById('area').value     = selectedMachine.area     || '';
+  document.getElementById('module').value   = selectedMachine.module   || '';
+  // Close dropdown
+  document.getElementById('machine-dropdown').classList.remove('open');
+}
+
+// Click outside to close
+document.addEventListener('click', e => {
+  if (!e.target.closest('.machine-dropdown-wrap')) {
+    document.getElementById('machine-dropdown').classList.remove('open');
+  }
+});
+
+// ── Shift calculation ─────────────────────────────────────────────────────────
+function getShift(timeStr) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const mins = h * 60 + m;
+  if (mins >= 360 && mins < 840)  return 'A';   // 06:00 – 13:59
+  if (mins >= 840 && mins < 1320) return 'B';   // 14:00 – 21:59
+  return 'C';                                    // 22:00 – 05:59
+}
+
+// ── Downtime ──────────────────────────────────────────────────────────────────
+function fmtMins(mins) {
+  if (!mins || mins <= 0) return '—';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+function calcDowntime() {
+  const startDate = document.getElementById('entry-date').value;
+  const endDate   = document.getElementById('end-date').value || startDate;
+  const s = document.getElementById('start-time').value;
+  const e = document.getElementById('end-time').value;
+  // Always update shift from start time
+  const shift = getShift(s);
+  document.getElementById('shift-display').value = shift ? shift + ' Shift' : '';
+  document.getElementById('shift-value').value   = shift;
+  if (!s || !e || !startDate) {
+    document.getElementById('downtime-display').textContent = '⏱ —'; return;
+  }
+  const startMs = new Date(`${startDate}T${s}:00`).getTime();
+  const endMs   = new Date(`${endDate}T${e}:00`).getTime();
+  let diff = Math.round((endMs - startMs) / 60000);
+  if (diff < 0) diff = 0;
+  const label = fmtMins(diff);
+  document.getElementById('downtime-display').textContent = `⏱ ${label}`;
+  document.getElementById('dt-footer-val').textContent = `${label} down`;
+  document.getElementById('downtime-footer').style.display = diff > 0 ? 'flex' : 'none';
+}
+
+// ── Dropdowns ─────────────────────────────────────────────────────────────────
+async function loadDropdowns() {
+  const res = await api('/api/dropdown-options');
+  if (!res || !res.ok) return;
+  const opts = await res.json();
+  const fill = (id, field) => {
+    const el = document.getElementById(id);
+    opts.filter(o => o.field_name === field).forEach(o => {
+      const opt = document.createElement('option');
+      opt.value = o.value; opt.textContent = o.value;
+      el.appendChild(opt);
+    });
+  };
+  fill('quality-confirmation', 'quality_confirmation');
+  fill('category', 'category');
+  fill('occurrence', 'occurrence');
+  fill('status', 'status');
+}
+
+// ── Submit ─────────────────────────────────────────────────────────────────────
+async function submitEntry() {
+  const machineId = document.getElementById('machine-id').value;
+  const date      = document.getElementById('entry-date').value;
+  const startTime = document.getElementById('start-time').value;
+  const endTime   = document.getElementById('end-time').value;
+  const trouble   = document.getElementById('trouble-description').value.trim();
+
+  if (!machineId) { showToast('Please select a machine.', 'error'); return; }
+  if (!date)      { showToast('Date is required.', 'error'); return; }
+  if (!startTime) { showToast('Start time is required.', 'error'); return; }
+  if (!endTime)   { showToast('End time is required.', 'error'); return; }
+  if (!trouble)   { showToast('Trouble description is required.', 'error'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  const body = {
+    machine_id:           parseInt(machineId),
+    area:                 document.getElementById('area').value,
+    module:               document.getElementById('module').value,
+    entry_date:           date,
+    end_date:             document.getElementById('end-date').value || date,
+    shift:                document.getElementById('shift-value').value,
+    start_time:           startTime,
+    end_time:             endTime,
+    error_message:        document.getElementById('error-message').value.trim(),
+    trouble_description:  trouble,
+    maintenance_action:   document.getElementById('maintenance-action').value.trim(),
+    quality_confirmation: document.getElementById('quality-confirmation').value,
+    category:             document.getElementById('category').value,
+    occurrence:           document.getElementById('occurrence').value,
+    status:               document.getElementById('status').value || 'Open',
+    engineer1:            document.getElementById('eng1').value.trim(),
+    engineer2:            document.getElementById('eng2').value.trim(),
+    engineer3:            document.getElementById('eng3').value.trim(),
+  };
+
+  const res = await api('/api/log-entries', { method: 'POST', body: JSON.stringify(body) });
+  const data = await res.json();
+  if (res.ok && data.success) {
+    showToast('Log entry submitted successfully!', 'success');
+    resetForm();
+  } else {
+    showToast(data.error || 'Error submitting entry.', 'error');
+  }
+  btn.disabled = false; btn.textContent = '✔ Submit Entry';
+}
+
+function resetForm() {
+  selectedMachine = null;
+  document.getElementById('machine-id').value = '';
+  document.getElementById('machine-trigger').style.display = '';
+  document.getElementById('machine-display').style.display = 'none';
+  document.getElementById('machine-dropdown').classList.remove('open');
+  ['location','area','module','error-message','trouble-description',
+   'maintenance-action','eng1','eng2','eng3'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  ['quality-confirmation','category','occurrence','status'].forEach(id => {
+    document.getElementById(id).selectedIndex = 0;
+  });
+  document.getElementById('start-time').value = '';
+  document.getElementById('end-time').value   = '';
+  document.getElementById('end-date').value   = '';
+  document.getElementById('shift-display').value = '';
+  document.getElementById('shift-value').value   = '';
+  document.getElementById('entry-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('downtime-display').textContent = '⏱ — min';
+  document.getElementById('downtime-footer').style.display = 'none';
+}
+
+loadMachines();
+loadDropdowns();
+</script>
+</body>
+</html>

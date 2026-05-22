@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 60" fill="none">
+  <!-- Globe circle -->
+  <circle cx="30" cy="30" r="22" fill="#0d2145"/>
+  <circle cx="30" cy="30" r="22" fill="url(#globeGrad)" opacity="0.6"/>
+  <!-- Green leaf/bolt shapes -->
+  <path d="M22 18 Q30 10 38 18 Q32 24 30 30 Q24 24 22 18Z" fill="#3ab54a" opacity="0.9"/>
+  <path d="M18 28 Q14 20 22 18 Q24 26 26 30 Q20 32 18 28Z" fill="#3ab54a" opacity="0.75"/>
+  <path d="M38 18 Q44 22 42 30 Q36 28 30 30 Q32 24 38 18Z" fill="#3ab54a" opacity="0.75"/>
+  <!-- Globe outline -->
+  <circle cx="30" cy="30" r="22" stroke="#1e4080" stroke-width="1.5" fill="none"/>
+  <!-- Horizontal lines on globe -->
+  <path d="M9 30 Q30 26 51 30" stroke="#1e4080" stroke-width="0.8" fill="none"/>
+  <path d="M11 22 Q30 18 49 22" stroke="#1e4080" stroke-width="0.6" fill="none"/>
+  <path d="M11 38 Q30 42 49 38" stroke="#1e4080" stroke-width="0.6" fill="none"/>
+  <!-- NASH text -->
+  <text x="60" y="27" font-family="Arial,sans-serif" font-weight="800" font-size="18" fill="#e8f0f8" letter-spacing="1">NASH</text>
+  <!-- ENERGY text -->
+  <text x="60" y="42" font-family="Arial,sans-serif" font-weight="700" font-size="12" fill="#3ab54a" letter-spacing="2">ENERGY</text>
+  <!-- Tagline -->
+  <text x="60" y="54" font-family="Arial,sans-serif" font-size="7" fill="#5a7aa8" letter-spacing="0.3">Powered by Japanese Technology</text>
+  <defs>
+    <radialGradient id="globeGrad" cx="40%" cy="35%" r="60%">
+      <stop offset="0%" stop-color="#1a4a8a"/>
+      <stop offset="100%" stop-color="#051020"/>
+    </radialGradient>
+  </defs>
+</svg>

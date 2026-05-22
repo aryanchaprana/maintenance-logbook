@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipment Master — Nash Energy</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/images/nash-logo.svg" alt="Nash Energy">
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-item"><span class="nav-icon">🏠</span> Dashboard</a>
+      <a href="/admin/machines"  class="nav-item active"><span class="nav-icon">🔧</span> Equipment Master</a>
+      <a href="/admin/logbook"   class="nav-item"><span class="nav-icon">📋</span> Log Book</a>
+      <a href="/admin/analysis"  class="nav-item"><span class="nav-icon">📊</span> Analysis</a>
+      <a href="/admin/settings"  class="nav-item"><span class="nav-icon">⚙️</span> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ username[0]|upper }}</div>
+        <div><div class="user-name">{{ username }}</div><div class="user-role">Administrator</div></div>
+      </div>
+      <button class="btn-logout" onclick="logout()">🚪 Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Equipment Master</div>
+        <div class="page-subtitle">Manage all machines and equipment</div>
+      </div>
+      <button class="btn btn-primary" onclick="openAdd()">＋ Add Machine</button>
+    </div>
+
+    <div class="page-body">
+      <div class="card mb-0">
+        <div class="card-header">
+          <span class="card-title">All Machines</span>
+          <div class="search-box">
+            <input type="text" class="form-control" id="search" placeholder="Search…" oninput="filterTable()" style="min-width:220px">
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="machines-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Equipment No</th>
+                <th>Equipment Name</th>
+                <th>Asset Code</th>
+                <th>Location</th>
+                <th>Area</th>
+                <th>Module</th>
+                <th>Capacity</th>
+                <th>Make</th>
+                <th>Install Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="machines-tbody">
+              <tr><td colspan="11"><div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-overlay" id="machine-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Machine</span>
+      <button class="modal-close" onclick="closeModal('machine-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="m-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Equipment No *</label>
+          <input type="text" class="form-control" id="m-eq-no" placeholder="e.g. NE-CAC-05">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Equipment Name *</label>
+          <input type="text" class="form-control" id="m-name" placeholder="e.g. Air Conditioner Unit 5">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Asset Code</label>
+          <input type="text" class="form-control" id="m-asset" placeholder="e.g. AST-001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Location</label>
+          <input type="text" class="form-control" id="m-location" placeholder="e.g. Floor 2, Block A">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Area</label>
+          <input type="text" class="form-control" id="m-area" placeholder="e.g. Production">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Module</label>
+          <input type="text" class="form-control" id="m-module" placeholder="e.g. Compressor">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label class="form-label">Capacity</label>
+          <input type="text" class="form-control" id="m-capacity" placeholder="e.g. 5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Unit</label>
+          <input type="text" class="form-control" id="m-unit" placeholder="e.g. Tr / kW">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Make</label>
+          <input type="text" class="form-control" id="m-make" placeholder="e.g. Midea">
+        </div>
+      </div>
+      <div class="form-group" style="max-width:260px">
+        <label class="form-label">Installation Date</label>
+        <input type="date" class="form-control" id="m-date">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('machine-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMachine()">Save Machine</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+let allMachines = [];
+
+async function loadMachines() {
+  const res = await api('/api/machines');
+  if (!res || !res.ok) return;
+  allMachines = await res.json();
+  renderTable(allMachines);
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById('machines-tbody');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="11"><div class="empty-state"><div class="empty-icon">🔧</div><p>No machines yet. Add your first machine.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map((m, i) => `
+    <tr>
+      <td class="text-muted text-sm">${i+1}</td>
+      <td><strong>${m.equipment_no}</strong></td>
+      <td>${m.name}</td>
+      <td class="text-muted">${m.asset_code || '—'}</td>
+      <td>${m.location || '—'}</td>
+      <td>${m.area || '—'}</td>
+      <td>${m.module || '—'}</td>
+      <td class="text-muted">${m.capacity ? m.capacity + ' ' + (m.unit || '') : '—'}</td>
+      <td class="text-muted">${m.make || '—'}</td>
+      <td class="text-muted text-sm">${m.installation_date || '—'}</td>
+      <td>
+        <button class="btn btn-secondary btn-sm" onclick="openEdit(${m.id})">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMachine(${m.id}, '${m.equipment_no}')">Delete</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filterTable() {
+  const q = document.getElementById('search').value.toLowerCase();
+  renderTable(allMachines.filter(m =>
+    (m.equipment_no||'').toLowerCase().includes(q) ||
+    (m.name||'').toLowerCase().includes(q) ||
+    (m.location||'').toLowerCase().includes(q) ||
+    (m.area||'').toLowerCase().includes(q) ||
+    (m.module||'').toLowerCase().includes(q) ||
+    (m.make||'').toLowerCase().includes(q)
+  ));
+}
+
+function openAdd() {
+  document.getElementById('modal-title').textContent = 'Add Machine';
+  ['m-id','m-eq-no','m-name','m-asset','m-location','m-area','m-module','m-capacity','m-unit','m-make','m-date']
+    .forEach(id => document.getElementById(id).value = '');
+  openModal('machine-modal');
+}
+
+function openEdit(id) {
+  const m = allMachines.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('modal-title').textContent = 'Edit Machine';
+  document.getElementById('m-id').value        = m.id;
+  document.getElementById('m-eq-no').value     = m.equipment_no || '';
+  document.getElementById('m-name').value      = m.name || '';
+  document.getElementById('m-asset').value     = m.asset_code || '';
+  document.getElementById('m-location').value  = m.location || '';
+  document.getElementById('m-area').value      = m.area || '';
+  document.getElementById('m-module').value    = m.module || '';
+  document.getElementById('m-capacity').value  = m.capacity || '';
+  document.getElementById('m-unit').value      = m.unit || '';
+  document.getElementById('m-make').value      = m.make || '';
+  document.getElementById('m-date').value      = m.installation_date || '';
+  openModal('machine-modal');
+}
+
+async function saveMachine() {
+  const id = document.getElementById('m-id').value;
+  const body = {
+    equipment_no:      document.getElementById('m-eq-no').value.trim(),
+    name:              document.getElementById('m-name').value.trim(),
+    asset_code:        document.getElementById('m-asset').value.trim(),
+    location:          document.getElementById('m-location').value.trim(),
+    area:              document.getElementById('m-area').value.trim(),
+    module:            document.getElementById('m-module').value.trim(),
+    capacity:          document.getElementById('m-capacity').value.trim(),
+    unit:              document.getElementById('m-unit').value.trim(),
+    make:              document.getElementById('m-make').value.trim(),
+    installation_date: document.getElementById('m-date').value,
+  };
+  if (!body.equipment_no || !body.name) { showToast('Equipment No and Name are required.', 'error'); return; }
+  const res = await api(id ? `/api/machines/${id}` : '/api/machines', {
+    method: id ? 'PUT' : 'POST', body: JSON.stringify(body)
+  });
+  const data = await res.json();
+  if (res.ok) {
+    showToast(id ? 'Machine updated.' : 'Machine added.', 'success');
+    closeModal('machine-modal');
+    loadMachines();
+  } else {
+    showToast(data.error || 'Error saving machine.', 'error');
+  }
+}
+
+async function deleteMachine(id, eqNo) {
+  if (!confirm(`Delete machine "${eqNo}"? This cannot be undone.`)) return;
+  const res = await api(`/api/machines/${id}`, { method: 'DELETE' });
+  if (res && res.ok) { showToast('Machine deleted.', 'success'); loadMachines(); }
+  else showToast('Error deleting machine.', 'error');
+}
+
+loadMachines();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+============================================================
+  MAINTENANCE MANAGER — HOW TO RUN
+============================================================
+
+STEP 1: Install Python 3.10+ if not already installed
+        https://www.python.org/downloads/
+
+STEP 2: Open a terminal / command prompt in this folder
+        (the folder that contains run.py)
+
+STEP 3: Install dependencies (only once):
+        pip install -r requirements.txt
+
+STEP 4: Start the app:
+        python run.py
+
+STEP 5: Open your browser and go to:
+        http://localhost:5000
+
+------------------------------------------------------------
+  DEFAULT LOGIN CREDENTIALS
+------------------------------------------------------------
+  Admin  →  username: admin    password: admin123
+  (Change this password after first login via Settings)
+
+------------------------------------------------------------
+  FIRST STEPS AFTER LOGIN
+------------------------------------------------------------
+  1. Go to Settings → Add user accounts for your team
+  2. Go to Equipment Master → Add your 256 machines
+  3. Share http://localhost:5000 with your team on the
+     same network (they can access via your PC's IP)
+     e.g. http://192.168.1.xxx:5000
+
+------------------------------------------------------------
+  PAGES
+------------------------------------------------------------
+  Admin:
+    Dashboard      → Quick stats and pending reviews
+    Equipment Master → Add/edit all machines
+    Log Book       → Review, edit, confirm user entries
+    Analysis       → Pareto charts, MTTR, trend analysis
+    Settings       → Manage dropdowns + user accounts
+
+  User:
+    Log Book       → Submit maintenance entries
+
+============================================================

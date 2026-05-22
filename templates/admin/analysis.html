@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Analysis — Nash Energy</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="app-layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="/static/images/nash-logo.svg" alt="Nash Energy">
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Admin</div>
+      <a href="/admin/dashboard" class="nav-item"><span class="nav-icon">🏠</span> Dashboard</a>
+      <a href="/admin/machines"  class="nav-item"><span class="nav-icon">🔧</span> Equipment Master</a>
+      <a href="/admin/logbook"   class="nav-item"><span class="nav-icon">📋</span> Log Book</a>
+      <a href="/admin/analysis"  class="nav-item active"><span class="nav-icon">📊</span> Analysis</a>
+      <a href="/admin/settings"  class="nav-item"><span class="nav-icon">⚙️</span> Settings</a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ username[0]|upper }}</div>
+        <div><div class="user-name">{{ username }}</div><div class="user-role">Administrator</div></div>
+      </div>
+      <button class="btn-logout" onclick="logout()">🚪 Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Analysis</div>
+        <div class="page-subtitle">Downtime trends, Pareto charts, and MTTR</div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary" onclick="exportPDF()">📄 Export PDF</button>
+        <button class="btn btn-secondary" onclick="exportImage()">🖼️ Export Image</button>
+      </div>
+    </div>
+
+    <div class="page-body" id="analysis-body">
+      <!-- Filters -->
+      <div class="card" style="padding:14px 20px; margin-bottom:20px;">
+        <div class="filter-bar" style="margin-bottom:0; flex-wrap:wrap;">
+          <label class="form-label" style="margin:0; white-space:nowrap">From:</label>
+          <input type="date" class="form-control" id="f-from">
+          <label class="form-label" style="margin:0; white-space:nowrap">To:</label>
+          <input type="date" class="form-control" id="f-to">
+          <select class="form-control" id="f-machine"><option value="">All Machines</option></select>
+          <select class="form-control" id="f-category"><option value="">All Categories</option></select>
+          <select class="form-control" id="f-status"><option value="">All Statuses</option></select>
+          <button class="btn btn-primary" onclick="loadAnalysis()">Apply Filters</button>
+          <button class="btn btn-secondary" onclick="clearFilters()">Clear</button>
+        </div>
+      </div>
+
+      <!-- KPI Metrics -->
+      <div class="metric-row">
+        <div class="metric-card">
+          <div class="metric-value" id="m-mttr" style="color:var(--accent-blue)">—</div>
+          <div class="metric-label">Avg MTTR (mins)</div>
+          <div class="metric-sub">Mean Time To Repair</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" id="m-incidents" style="color:var(--accent-orange)">—</div>
+          <div class="metric-label">Total Incidents</div>
+          <div class="metric-sub">In selected period</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" id="m-total-dt" style="color:var(--accent-yellow)">—</div>
+          <div class="metric-label">Total Downtime</div>
+          <div class="metric-sub">Hours lost</div>
+        </div>
+      </div>
+
+      <!-- Charts Row 1 -->
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🏭 Top Machines by Downtime (Pareto)</span>
+          </div>
+          <div class="chart-container"><canvas id="chart-machine"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🗂️ Top Categories by Downtime (Pareto)</span>
+          </div>
+          <div class="chart-container"><canvas id="chart-category"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Charts Row 2 -->
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📈 Monthly Downtime Trend</span>
+          </div>
+          <div class="chart-container"><canvas id="chart-trend"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔵 Issue Status Breakdown</span>
+          </div>
+          <div class="chart-container"><canvas id="chart-status"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/main.js"></script>
+<script>
+const BLUE   = 'rgba(47,129,247,0.8)';
+const ORANGE = 'rgba(247,129,102,0.8)';
+const GREEN  = 'rgba(63,185,80,0.8)';
+const YELLOW = 'rgba(210,153,34,0.8)';
+const PURPLE = 'rgba(137,87,229,0.8)';
+const COLORS = [BLUE, ORANGE, GREEN, YELLOW, PURPLE, 'rgba(200,200,200,0.7)'];
+
+const chartDefaults = {
+  plugins: { legend: { labels: { color: '#8b949e', font: { size: 12 } } } },
+  scales: {
+    x: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.8)' } },
+    y: { ticks: { color: '#8b949e' }, grid: { color: 'rgba(48,54,61,0.8)' } }
+  }
+};
+
+let charts = {};
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+async function init() {
+  const mRes = await api('/api/machines');
+  if (mRes && mRes.ok) {
+    const machines = await mRes.json();
+    machines.forEach(m => {
+      document.getElementById('f-machine').innerHTML += `<option value="${m.id}">${m.equipment_no} — ${m.name}</option>`;
+    });
+  }
+  const dRes = await api('/api/dropdown-options');
+  if (dRes && dRes.ok) {
+    const opts = await dRes.json();
+    opts.filter(o => o.field_name === 'category').forEach(o => {
+      document.getElementById('f-category').innerHTML += `<option value="${o.value}">${o.value}</option>`;
+    });
+    opts.filter(o => o.field_name === 'status').forEach(o => {
+      document.getElementById('f-status').innerHTML += `<option value="${o.value}">${o.value}</option>`;
+    });
+  }
+  loadAnalysis();
+}
+
+async function loadAnalysis() {
+  const params = new URLSearchParams();
+  const fv = document.getElementById('f-from').value;
+  const tv = document.getElementById('f-to').value;
+  const mv = document.getElementById('f-machine').value;
+  const cv = document.getElementById('f-category').value;
+  const sv = document.getElementById('f-status').value;
+  if (fv) params.set('date_from', fv);
+  if (tv) params.set('date_to', tv);
+  if (mv) params.set('machine_id', mv);
+  if (cv) params.set('category', cv);
+  if (sv) params.set('status', sv);
+
+  const res = await api('/api/analysis?' + params);
+  if (!res || !res.ok) return;
+  const d = await res.json();
+
+  // KPI Metrics
+  const mttr = d.mttr.avg_downtime ? Math.round(d.mttr.avg_downtime) : 0;
+  document.getElementById('m-mttr').textContent = mttr || '—';
+  document.getElementById('m-incidents').textContent = d.mttr.total_incidents || 0;
+  const totalHours = d.mttr.total_downtime ? (d.mttr.total_downtime / 60).toFixed(1) : 0;
+  document.getElementById('m-total-dt').textContent = totalHours ? `${totalHours}h` : '—';
+
+  // Pareto Machine
+  destroyChart('machine');
+  const machineLabels = d.pareto_machine.map(r => r.equipment_no);
+  const machineDT = d.pareto_machine.map(r => r.total_downtime);
+  const machineCum = machineDT.reduce((acc, v, i) => { acc.push((acc[i-1]||0)+v); return acc; }, []);
+  const totalDT = machineDT.reduce((a,b)=>a+b,0);
+  const machineCumPct = machineCum.map(v => totalDT ? Math.round(v/totalDT*100) : 0);
+
+  charts.machine = new Chart(document.getElementById('chart-machine'), {
+    data: {
+      labels: machineLabels,
+      datasets: [
+        { type:'bar', label:'Downtime (mins)', data: machineDT, backgroundColor: BLUE, yAxisID:'y' },
+        { type:'line', label:'Cumulative %', data: machineCumPct, borderColor: ORANGE, backgroundColor:'transparent', yAxisID:'y1', pointRadius:4, tension:0.3 }
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      scales: {
+        x: { ticks:{color:'#8b949e', maxRotation:45}, grid:{color:'rgba(48,54,61,0.8)'} },
+        y: { ticks:{color:'#8b949e'}, grid:{color:'rgba(48,54,61,0.8)'}, title:{display:true,text:'Minutes',color:'#8b949e'} },
+        y1: { position:'right', min:0, max:100, ticks:{color:'#8b949e', callback:v=>v+'%'}, grid:{display:false} }
+      }
+    }
+  });
+
+  // Pareto Category
+  destroyChart('category');
+  const catLabels = d.pareto_category.map(r => r.category || 'Unclassified');
+  const catDT = d.pareto_category.map(r => r.total_downtime);
+  const catCum = catDT.reduce((acc,v,i)=>{acc.push((acc[i-1]||0)+v);return acc;},[]);
+  const catTotal = catDT.reduce((a,b)=>a+b,0);
+  const catCumPct = catCum.map(v => catTotal ? Math.round(v/catTotal*100) : 0);
+
+  charts.category = new Chart(document.getElementById('chart-category'), {
+    data: {
+      labels: catLabels,
+      datasets: [
+        { type:'bar', label:'Downtime (mins)', data: catDT, backgroundColor: COLORS, yAxisID:'y' },
+        { type:'line', label:'Cumulative %', data: catCumPct, borderColor: ORANGE, backgroundColor:'transparent', yAxisID:'y1', pointRadius:4, tension:0.3 }
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      scales: {
+        x: { ticks:{color:'#8b949e'}, grid:{color:'rgba(48,54,61,0.8)'} },
+        y: { ticks:{color:'#8b949e'}, grid:{color:'rgba(48,54,61,0.8)'}, title:{display:true,text:'Minutes',color:'#8b949e'} },
+        y1: { position:'right', min:0, max:100, ticks:{color:'#8b949e', callback:v=>v+'%'}, grid:{display:false} }
+      }
+    }
+  });
+
+  // Monthly Trend
+  destroyChart('trend');
+  charts.trend = new Chart(document.getElementById('chart-trend'), {
+    type: 'line',
+    data: {
+      labels: d.monthly_trend.map(r => r.month),
+      datasets: [
+        { label:'Downtime (mins)', data: d.monthly_trend.map(r=>r.total_downtime), borderColor:BLUE, backgroundColor:'rgba(47,129,247,0.1)', fill:true, tension:0.4, pointRadius:5 },
+        { label:'Incidents', data: d.monthly_trend.map(r=>r.incident_count), borderColor:ORANGE, backgroundColor:'transparent', tension:0.4, pointRadius:5, yAxisID:'y1' }
+      ]
+    },
+    options: {
+      ...chartDefaults,
+      scales: {
+        x: { ticks:{color:'#8b949e'}, grid:{color:'rgba(48,54,61,0.8)'} },
+        y: { ticks:{color:'#8b949e'}, grid:{color:'rgba(48,54,61,0.8)'}, title:{display:true,text:'Downtime (mins)',color:'#8b949e'} },
+        y1: { position:'right', ticks:{color:'#8b949e'}, grid:{display:false}, title:{display:true,text:'Incidents',color:'#8b949e'} }
+      }
+    }
+  });
+
+  // Status Breakdown
+  destroyChart('status');
+  const statusColors = { 'Open':ORANGE, 'In Progress':BLUE, 'Awaiting Parts':PURPLE, 'Closed':GREEN };
+  charts.status = new Chart(document.getElementById('chart-status'), {
+    type: 'doughnut',
+    data: {
+      labels: d.status_breakdown.map(r => r.status),
+      datasets: [{
+        data: d.status_breakdown.map(r => r.count),
+        backgroundColor: d.status_breakdown.map(r => statusColors[r.status] || YELLOW),
+        borderWidth: 2,
+        borderColor: '#1c2128'
+      }]
+    },
+    options: {
+      plugins: {
+        legend: { position:'right', labels:{color:'#e6edf3', padding:16} }
+      },
+      cutout: '60%'
+    }
+  });
+}
+
+function clearFilters() {
+  ['f-from','f-to','f-machine','f-category','f-status'].forEach(id => { document.getElementById(id).value = ''; });
+  loadAnalysis();
+}
+
+async function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('l', 'mm', 'a4');
+  const el = document.getElementById('analysis-body');
+  const canvas = await html2canvas(el, { background: '#0d1117', scale: 1.5 });
+  const img = canvas.toDataURL('image/png');
+  const pw = doc.internal.pageSize.getWidth();
+  const ph = doc.internal.pageSize.getHeight();
+  doc.addImage(img, 'PNG', 0, 0, pw, ph, '', 'FAST');
+  doc.save(`maintenance-analysis-${new Date().toISOString().slice(0,10)}.pdf`);
+  showToast('PDF exported.', 'success');
+}
+
+async function exportImage() {
+  const el = document.getElementById('analysis-body');
+  const canvas = await html2canvas(el, { background: '#0d1117', scale: 2 });
+  const link = document.createElement('a');
+  link.download = `maintenance-analysis-${new Date().toISOString().slice(0,10)}.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+  showToast('Image exported.', 'success');
+}
+
+init();
+</script>
+</body>
+</html>
